@@ -38,18 +38,18 @@
 |------|------|------|------|------|
 | s01 | Agent Loop | ✅ | ✅ | ✅ |
 | s02 | Tool Use | ✅ | ✅ | ✅ |
-| s03 | Todo Write | ⏳ 缺失 | - | - |
+| s03 | Todo Write | ✅ | ⏳ | ✅ |
 | s04 | Subagent | ✅ | ⏳ | ⏳ |
-| s05 | Skill Loading | ⏳ 缺失 | - | - |
-| s06 | Context Compact | ⏳ 缺失 | - | - |
-| s07 | Task System | ⏳ 缺失 | - | - |
-| s08 | Background Tasks | ⏳ 缺失 | - | - |
+| s05 | Skill Loading | ✅ | ⏳ | ✅ |
+| s06 | Context Compact | ✅ | ⏳ | ✅ |
+| s07 | Task System | ✅ | ⏳ | ✅ |
+| s08 | Background Tasks | ✅ | ⏳ | ✅ |
 | s09 | Agent Teams | ✅ | ⏳ | ⏳ |
 | s10 | Team Protocols | ✅ | ⏳ | ⏳ |
-| s11 | Autonomous Agents | ⏳ 缺失 | - | - |
-| s12 | Worktree Isolation | ⏳ 缺失 | - | - |
+| s11 | Autonomous Agents | ✅ | ⏳ | ✅ |
+| s12 | Worktree Isolation | ❌ 原仓库无 | - | - |
 
-**当前进度：5/12 模块**（s01, s02, s04, s09, s10 已下载）
+**当前进度：11/12 模块**（s12 原仓库不存在）
 
 ---
 
@@ -363,48 +363,27 @@ MIT
 
 ---
 
-## ⏳ 待补充模块
+## ⏳ 待补充内容
 
-以下模块代码尚未下载到本地仓库：
+以下模块的注解版本和笔记待补充：
 
-### s03：任务管理 (Todo Write)
-**文件：** `s03_todo_write.py` | `s03_notes.md`
-- 任务列表管理
-- 任务状态追踪
-- 对标：OpenClaw 无直接对应
+### s04：子 Agent (Subagent)
+**文件：** `s04_subagent.py` | `s04_notes.md` ✅
+- ✅ 代码已下载
+- ✅ 笔记已写
+- ⏳ 注解版待补充
 
-### s05：技能加载 (Skill Loading)
-**文件：** `s05_skill_loading.py` | `s05_notes.md`
-- 动态加载技能
-- 技能发现机制
-- 对标：OpenClaw Skills 自动发现
+### s09：Agent 团队协作 (Agent Teams)
+**文件：** `s09_agent_teams.py` | `s09_notes.md`
+- ✅ 代码已下载
+- ⏳ 笔记待写
+- ⏳ 注解版待补充
 
-### s06：上下文压缩 (Context Compact)
-**文件：** `s06_context_compact.py` | `s06_notes.md`
-- 上下文长度管理
-- 摘要压缩策略
-- 对标：OpenClaw 无直接对应
+### s10：团队协议 (Team Protocols)
+**文件：** `s10_team_protocols.py` | `s10_notes.md`
+- ✅ 代码已下载
+- ⏳ 笔记待写
+- ⏳ 注解版待补充
 
-### s07：任务系统 (Task System)
-**文件：** `s07_task_system.py` | `s07_notes.md`
-- 任务持久化
-- 任务队列管理
-- 对标：OpenClaw Cron 任务
-
-### s08：后台任务 (Background Tasks)
-**文件：** `s08_background_tasks.py` | `s08_notes.md`
-- 后台任务调度
-- 定时任务执行
-- 对标：OpenClaw Heartbeat 机制
-
-### s11：自主 Agent (Autonomous Agents)
-**文件：** `s11_autonomous_agents.py` | `s11_notes.md`
-- 自主决策
-- 目标驱动行为
-- 对标：OpenClaw HEARTBEAT.md 自主检查
-
-### s12：工作树隔离 (Worktree Task Isolation)
-**文件：** `s12_worktree_isolation.py` | `s12_notes.md`
-- 任务环境隔离
-- Git Worktree 使用
-- 对标：OpenClaw 工作区隔离
+### s12：工作树隔离 (Worktree Isolation)
+**状态：** 原仓库不存在此文件，可能已移除或合并到其他模块
