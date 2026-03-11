@@ -702,9 +702,12 @@ MIT
 
 **状态：** 原仓库只提供了 s01/s02 的注解版（`*_annotated.py`）
 
-- ✅ s01_agent_loop_annotated.py
-- ✅ s02_tool_use_annotated.py
-- ⏳ s03-s11 注解版待补充（可以手动添加）
+**本地进度：**
+- ✅ s01_agent_loop_annotated.py（原仓库提供）
+- ✅ s02_tool_use_annotated.py（原仓库提供）
+- ✅ s03_todo_write_annotated.py（已创建）
+- ✅ s04_subagent_annotated.py（已创建）
+- ⏳ s05-s11 注解版待创建
 
 ### s12 模块
 
