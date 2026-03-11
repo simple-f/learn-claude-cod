@@ -47,9 +47,9 @@
 | s09 | Agent Teams | ✅ | ⏳ | ✅ |
 | s10 | Team Protocols | ✅ | ⏳ | ✅ |
 | s11 | Autonomous Agents | ✅ | ⏳ | ✅ |
-| s12 | Worktree Isolation | ❌ 原仓库无 | - | - |
+| s12 | Worktree Isolation | ⏳ 只有文档 | - | ⏳ |
 
-**当前进度：11/12 模块代码 + 11/12 模块笔记**（s12 原仓库不存在）
+**当前进度：11/12 模块代码 + 11/12 模块笔记**（s12 原仓库只有文档）
 
 ---
 
@@ -321,12 +321,16 @@ Lead                              Teammate
 
 ### 第 12 课：工作树隔离 (s12)
 
-**状态：** ❌ 原仓库不存在此文件
+**文件：** ⏳ 代码待补充 | `s12_notes.md`
+
+**状态：** 原仓库只有文档，代码文件尚未创建
 
 **推测内容：**
 - Git Worktree 使用
 - 任务环境隔离
 - 并行任务不冲突
+
+**参考文档：** https://github.com/shareAI-lab/learn-claude-code/blob/main/docs/en/s12-worktree-task-isolation.md
 
 ---
 
@@ -704,6 +708,13 @@ MIT
 
 ### s12 模块
 
-**状态：** 原仓库不存在此文件，可能已移除或合并到其他模块
+**状态：** 原仓库只有文档，代码文件尚未实现
+
+**文档：** https://github.com/shareAI-lab/learn-claude-code/blob/main/docs/en/s12-worktree-task-isolation.md
+
+**推测内容：**
+- Git Worktree 多工作区隔离
+- 每个任务独立的工作区
+- 避免文件冲突
 
 ---
