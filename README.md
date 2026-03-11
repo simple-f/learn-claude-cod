@@ -55,7 +55,7 @@
 
 ## 📚 课程目录
 
-> **说明**：当前仓库包含 s01, s02, s04, s09, s10 共 5 个模块的代码和笔记。其余模块后续补充。
+> **说明**：当前仓库包含全部 11 个模块的代码和详细笔记。每个模块都有核心概念、代码分析、与 OpenClaw 对比和练习题。
 
 ### 第 1 课：Agent 核心循环 (s01)
 
@@ -88,16 +88,247 @@
 **学习内容：**
 - **开闭原则**：核心循环不变，通过扩展工具数组增加功能
 - **Dispatch Map 模式**：用字典分发工具调用
-  ```python
-  TOOL_HANDLERS = {
-      "bash": lambda **kw: run_bash(kw["command"]),
-      "read_file": lambda **kw: run_read(kw["path"], kw.get("limit")),
-      "write_file": lambda **kw: run_write(kw["path"], kw["content"]),
-      "edit_file": lambda **kw: run_edit(kw["path"], kw["old_text"], kw["new_text"]),
-  }
-  ```
 - **路径安全检查**：防止 `../../../etc/passwd` 逃逸攻击
 - **工具定义 Schema**：告诉 LLM 工具名称、描述、参数
+
+**新增工具：**
+- `bash` - 执行 shell 命令
+- `read_file` - 读取文件（支持行数限制）
+- `write_file` - 写入文件
+- `edit_file` - 精确文本替换
+
+---
+
+### 第 3 课：任务管理 (s03)
+
+**文件：** `s03_todo_write.py` | `s03_notes.md`
+
+**学习内容：**
+- **TodoManager 类**：结构化任务追踪
+- **状态管理**：pending / in_progress / completed
+- **验证规则**：最多 20 项、只能有 1 个 in_progress
+- **渲染格式**：`[>] #2: 任务 B`（视觉提示）
+
+**核心代码：**
+- 第 33-72 行：TodoManager 类
+- 第 155-175 行：todo 工具定义
+
+**关键理解：**
+- 外部化状态（不占用 context tokens）
+- 强制专注（只能有 1 个进行中任务）
+- 人类可见的进度追踪
+
+---
+
+### 第 4 课：子 Agent 系统 (s04)
+
+**文件：** `s04_subagent.py` | `s04_notes.md`
+
+**学习内容：**
+- **上下文隔离**：子 Agent 有全新的 `messages=[]`
+- **进程隔离**：父 Agent 上下文保持干净
+- **任务委派**：通过 `task` 工具派生子任务
+- **权限分离**：子 Agent 没有 `task` 工具（不能递归）
+
+**架构图：**
+```
+Parent Agent                     Subagent
++------------------+             +------------------+
+| messages=[...]   |             | messages=[]      | <-- 全新上下文
+| tool: task       | ---------->| while tool_use:  |
+| prompt="..."     |            |   执行工具       |
+|                  | <--------- | return summary   |
++------------------+             +------------------+
+```
+
+**关键理解：**
+- 子 Agent 上下文在完成后丢弃
+- 只返回摘要（不返回完整对话）
+- 可以并行派生多个子 Agent
+
+---
+
+### 第 5 课：技能加载 (s05)
+
+**文件：** `s05_skill_loading.py` | `s05_notes.md`
+
+**学习内容：**
+- **双层注入架构**：Layer 1（元数据）+ Layer 2（完整内容）
+- **Token 经济性**：按需加载，节省 86% tokens
+- **技能目录**：`skills/<name>/SKILL.md`
+- **YAML Frontmatter**：name / description / tags
+
+**核心代码：**
+- 第 35-72 行：SkillLoader 类
+- Layer 1：`get_descriptions()` - 简短描述
+- Layer 2：`get_content(name)` - 完整技能内容
+
+**关键理解：**
+- 不要把所有指令都塞进 system prompt
+- 自动发现（扫描 skills 目录）
+- XML 包装（清晰边界）
+
+---
+
+### 第 6 课：上下文压缩 (s06)
+
+**文件：** `s06_context_compact.py` | `s06_notes.md`
+
+**学习内容：**
+- **三层压缩管道**：micro_compact → auto_compact → compact 工具
+- **Layer 1**：替换旧 tool_result 为占位符（每回合）
+- **Layer 2**：LLM 总结 + 保存到 `.transcripts/`（超过 50k tokens）
+- **Layer 3**：手动触发压缩
+
+**核心代码：**
+- 第 37-63 行：micro_compact（静默执行）
+- 第 66-90 行：auto_compact（自动触发）
+- 第 30-33 行：token 估算
+
+**关键理解：**
+- 战略性遗忘（保持关键信息）
+- 持久化备份（.transcripts/ JSONL）
+- LLM 总结（2000 tokens 以内）
+
+---
+
+### 第 7 课：任务系统 (s07)
+
+**文件：** `s07_task_system.py` | `s07_notes.md`
+
+**学习内容：**
+- **任务持久化**：`.tasks/task_<id>.json`
+- **依赖图**：blockedBy / blocks 双向关联
+- **自动解锁**：完成任务后自动解除依赖
+- **状态管理**：pending / in_progress / completed
+
+**核心代码：**
+- 第 33-104 行：TaskManager 类
+- 第 86-91 行：`_clear_dependency()` - 自动解锁
+
+**关键理解：**
+- 外部状态（压缩后不丢失）
+- 双向依赖（A blocks B → B blockedBy A）
+- 多 Agent 共享任务板
+
+---
+
+### 第 8 课：后台任务 (s08)
+
+**文件：** `s08_background_tasks.py` | `s08_notes.md`
+
+**学习内容：**
+- **线程模型**：主线程不阻塞，后台并行执行
+- **通知队列**：drain_notifications() 注入结果
+- **线程安全**：Lock 保护共享数据
+- **超时控制**：300 秒超时
+
+**核心代码：**
+- 第 32-84 行：BackgroundManager 类
+- 第 40-52 行：`run()` - 启动后台线程
+- 第 68-77 行：`drain_notifications()` - 排出通知
+
+**关键理解：**
+- Fire and forget（发射后不管）
+- 并行执行（多个任务同时运行）
+- 通知队列（解耦主线程和后台）
+
+---
+
+### 第 9 课：Agent 团队协作 (s09)
+
+**文件：** `s09_agent_teams.py` | `s09_notes.md`
+
+**学习内容：**
+- **持久化 Agent**：spawn → work → idle → work（不是用完即弃）
+- **JSONL 信箱**：每个队友独立的 `.jsonl` 收件箱
+- **5 种消息类型**：message / broadcast / shutdown_request / shutdown_response / plan_approval_response
+- **轮询机制**：5 秒间隔检查收件箱
+
+**架构图：**
+```
+.team/inbox/
+  alice.jsonl
+  bob.jsonl
+  lead.jsonl
+
+send_message("alice", "fix bug"):
+  open("alice.jsonl", "a").write(msg)
+
+read_inbox("alice"):
+  msgs = [json.loads(l) for l in ...]
+  open("alice.jsonl", "w").close()  # drain
+```
+
+**关键理解：**
+- 追加写入（不覆盖历史）
+- 读取后清空（drain 模式）
+- 异步通信（发送者不等待）
+
+---
+
+### 第 10 课：团队协议 (s10)
+
+**文件：** `s10_team_protocols.py` | `s10_notes.md`
+
+**学习内容：**
+- **关闭协议**：shutdown_request → shutdown_response
+- **计划审批协议**：plan_approval → plan_approval_response
+- **request_id 关联**：用唯一 ID 关联请求和响应
+- **状态机**：pending → approved | rejected
+
+**架构图：**
+```
+Shutdown FSM:
+Lead                              Teammate
++---------------------+          +---------------------+
+| shutdown_request     | -------> | receives request    |
+| {request_id: abc}    |          | decides: approve?   |
++---------------------+          +---------------------+
+| shutdown_response    | <------- | shutdown_response   |
+| {approve: true}      |          | {approve: true}     |
++---------------------+          +---------------------+
+```
+
+**关键理解：**
+- 同一个 request_id 模式，两个应用领域
+- 优雅关闭（不是强制杀死）
+- 异步审批（支持并发请求）
+
+---
+
+### 第 11 课：自主 Agent (s11)
+
+**文件：** `s11_autonomous_agents.py` | `s11_notes.md`
+
+**学习内容：**
+- **空闲循环**：poll every 5s for up to 60s
+- **任务认领**：scan .tasks/ → unclaimed? → claim
+- **身份重新注入**：压缩后恢复角色信息
+- **超时关闭**：60 秒无工作 → shutdown
+
+**核心代码：**
+- 第 70-90 行：idle_cycle() - 空闲循环
+- 第 92-103 行：scan_unclaimed_tasks() / claim_task()
+- 第 106-120 行：create_identity_block()
+
+**关键理解：**
+- 自主寻找工作（不是被动等待）
+- 任务板模式（去中心化分配）
+- 身份持久化（压缩后恢复）
+
+---
+
+### 第 12 课：工作树隔离 (s12)
+
+**状态：** ❌ 原仓库不存在此文件
+
+**推测内容：**
+- Git Worktree 使用
+- 任务环境隔离
+- 并行任务不冲突
+
+---
 
 **新增工具：**
 - `bash` - 执行 shell 命令
