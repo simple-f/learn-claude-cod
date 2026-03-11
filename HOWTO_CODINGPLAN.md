@@ -8,8 +8,9 @@
 | s02 | s02_tool_use.py | s02_tool_use_openai.py | ✅ 完成 |
 | s03 | s03_todo_write.py | s03_todo_write_openai.py | ✅ 完成 |
 | s04 | s04_subagent.py | s04_subagent_openai.py | ✅ 完成 |
-| s05 | s05_skill_loading.py | ⏳ 待创建 | ⏳ 进行中 |
-| s06-s11 | ... | ⏳ 待创建 | ⏳ 待开始 |
+| s05 | s05_skill_loading.py | s05_skill_loading_openai.py | ✅ 完成 |
+| s06 | s06_context_compact.py | ⏳ 待创建 | ⏳ 进行中 |
+| s07-s11 | ... | ⏳ 待创建 | ⏳ 待开始 |
 
 ## 📋 修改清单
 
