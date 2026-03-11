@@ -1,10 +1,61 @@
 # Learn Claude Code
 
-学习 Claude Code 的示例代码和详细笔记。通过 10 节课从基础 Agent 循环到多 Agent 团队协作。
+🤖 **从零构建 AI Agent 框架的教学项目**
+
+本项目是 [shareAI-lab/learn-claude-code](https://github.com/shareAI-lab/learn-claude-code)（24,826+ ⭐）的学习笔记和代码注解版本。通过 12 个模块，从最基础的 Agent 循环开始，逐步构建完整的多 Agent 协作系统。
+
+## 🎯 项目目标
+
+- **理解 AI Agent 核心原理**：从第一行代码开始构建，不依赖黑盒框架
+- **掌握关键设计模式**：ReAct 循环、工具调用、子代理、团队协作
+- **对比实战**：与 OpenClaw 项目对照学习，理解生产级 Agent 系统设计
+
+## 📚 适用人群
+
+- 想理解 AI Agent 内部工作原理的开发者
+- 想构建自己的 Agent 框架的工程师
+- OpenClaw 用户想深入了解底层实现
+
+## 📊 学习路径
+
+```
+阶段一：核心循环（第 1-2 天）
+  s01 → s02
+     ↓
+阶段二：规划与知识（第 3-5 天）
+  s03 → s04 → s05 → s06
+     ↓
+阶段三：持久化（第 6-7 天）
+  s07 → s08
+     ↓
+阶段四：团队协作（第 8-10 天）
+  s09 → s10 → s11 → s12
+```
+
+## 📁 本地文件状态
+
+| 模块 | 主题 | 代码 | 注解 | 笔记 |
+|------|------|------|------|------|
+| s01 | Agent Loop | ✅ | ✅ | ✅ |
+| s02 | Tool Use | ✅ | ✅ | ✅ |
+| s03 | Todo Write | ⏳ 缺失 | - | - |
+| s04 | Subagent | ✅ | ⏳ | ⏳ |
+| s05 | Skill Loading | ⏳ 缺失 | - | - |
+| s06 | Context Compact | ⏳ 缺失 | - | - |
+| s07 | Task System | ⏳ 缺失 | - | - |
+| s08 | Background Tasks | ⏳ 缺失 | - | - |
+| s09 | Agent Teams | ✅ | ⏳ | ⏳ |
+| s10 | Team Protocols | ✅ | ⏳ | ⏳ |
+| s11 | Autonomous Agents | ⏳ 缺失 | - | - |
+| s12 | Worktree Isolation | ⏳ 缺失 | - | - |
+
+**当前进度：5/12 模块**（s01, s02, s04, s09, s10 已下载）
 
 ---
 
 ## 📚 课程目录
+
+> **说明**：当前仓库包含 s01, s02, s04, s09, s10 共 5 个模块的代码和笔记。其余模块后续补充。
 
 ### 第 1 课：Agent 核心循环 (s01)
 
@@ -309,3 +360,51 @@ s10 (Team Protocols)
 ## 📄 License
 
 MIT
+
+---
+
+## ⏳ 待补充模块
+
+以下模块代码尚未下载到本地仓库：
+
+### s03：任务管理 (Todo Write)
+**文件：** `s03_todo_write.py` | `s03_notes.md`
+- 任务列表管理
+- 任务状态追踪
+- 对标：OpenClaw 无直接对应
+
+### s05：技能加载 (Skill Loading)
+**文件：** `s05_skill_loading.py` | `s05_notes.md`
+- 动态加载技能
+- 技能发现机制
+- 对标：OpenClaw Skills 自动发现
+
+### s06：上下文压缩 (Context Compact)
+**文件：** `s06_context_compact.py` | `s06_notes.md`
+- 上下文长度管理
+- 摘要压缩策略
+- 对标：OpenClaw 无直接对应
+
+### s07：任务系统 (Task System)
+**文件：** `s07_task_system.py` | `s07_notes.md`
+- 任务持久化
+- 任务队列管理
+- 对标：OpenClaw Cron 任务
+
+### s08：后台任务 (Background Tasks)
+**文件：** `s08_background_tasks.py` | `s08_notes.md`
+- 后台任务调度
+- 定时任务执行
+- 对标：OpenClaw Heartbeat 机制
+
+### s11：自主 Agent (Autonomous Agents)
+**文件：** `s11_autonomous_agents.py` | `s11_notes.md`
+- 自主决策
+- 目标驱动行为
+- 对标：OpenClaw HEARTBEAT.md 自主检查
+
+### s12：工作树隔离 (Worktree Task Isolation)
+**文件：** `s12_worktree_isolation.py` | `s12_notes.md`
+- 任务环境隔离
+- Git Worktree 使用
+- 对标：OpenClaw 工作区隔离
