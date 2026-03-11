@@ -32,25 +32,6 @@
   s09 → s10 → s11 → s12
 ```
 
-## 📁 本地文件状态
-
-| 模块 | 主题 | 代码 | 注解 | 笔记 |
-|------|------|------|------|------|
-| s01 | Agent Loop | ✅ | ✅ | ✅ |
-| s02 | Tool Use | ✅ | ✅ | ✅ |
-| s03 | Todo Write | ✅ | ⏳ | ✅ |
-| s04 | Subagent | ✅ | ⏳ | ✅ |
-| s05 | Skill Loading | ✅ | ⏳ | ✅ |
-| s06 | Context Compact | ✅ | ⏳ | ✅ |
-| s07 | Task System | ✅ | ⏳ | ✅ |
-| s08 | Background Tasks | ✅ | ⏳ | ✅ |
-| s09 | Agent Teams | ✅ | ⏳ | ✅ |
-| s10 | Team Protocols | ✅ | ⏳ | ✅ |
-| s11 | Autonomous Agents | ✅ | ⏳ | ✅ |
-| s12 | Worktree Isolation | ⏳ 只有文档 | - | ⏳ |
-
-**当前进度：11/12 模块代码 + 11/12 模块笔记**（s12 原仓库只有文档）
-
 ---
 
 ## 📚 课程目录
