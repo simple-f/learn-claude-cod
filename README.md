@@ -702,3 +702,72 @@ MIT
 - 避免文件冲突
 
 ---
+
+## 🔀 版本对比
+
+### 原仓库 vs 适配后
+
+| 项目 | 原仓库 | 适配后（OpenAI 版） |
+|------|--------|-------------------|
+| **SDK** | `anthropic` | `openai` |
+| **API** | Anthropic API | 阿里 DashScope |
+| **模型** | claude-sonnet-4-5 | qwen-coder-plus |
+| **注释语言** | 英文 | 中文详细注释 |
+| **笔记** | 无 | 11 篇详细中文笔记 |
+| **配置** | `.env` (Anthropic) | `.env` (DashScope) |
+
+### SDK API 对比
+
+**原始版本（Anthropic）：**
+```python
+from anthropic import Anthropic
+client = Anthropic(base_url=os.getenv("ANTHROPIC_BASE_URL"))
+
+response = client.messages.create(
+    model=MODEL,
+    system=SYSTEM,
+    messages=messages,
+    tools=TOOLS,
+    max_tokens=8000,
+)
+```
+
+**适配版本（OpenAI/阿里）：**
+```python
+from openai import OpenAI
+client = OpenAI(
+    api_key=os.getenv("DASHSCOPE_API_KEY"),
+    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"
+)
+
+response = client.chat.completions.create(
+    model=MODEL,
+    messages=[{"role": "system", "content": SYSTEM}] + messages,
+    tools=TOOLS,
+    max_tokens=8000,
+)
+```
+
+### 关键差异
+
+1. **System Prompt 位置**
+   - Anthropic: 独立参数 `system=SYSTEM`
+   - OpenAI: 放在 messages 数组内 `[{"role": "system", "content": SYSTEM}]`
+
+2. **工具调用响应**
+   - Anthropic: `response.content` (Block 列表)
+   - OpenAI: `response.choices[0].message.tool_calls` (ToolCall 列表)
+
+3. **工具结果格式**
+   - Anthropic: `tool_use_id`
+   - OpenAI: `tool_call_id`
+
+---
+
+## 📞 联系方式
+
+- **原仓库：** https://github.com/shareAI-lab/learn-claude-code
+- **适配仓库：** https://github.com/simple-f/learn-claude-cod
+- **问题反馈：** 提交 Issue 或 Pull Request
+
+---
