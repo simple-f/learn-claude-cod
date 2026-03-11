@@ -39,17 +39,17 @@
 | s01 | Agent Loop | ✅ | ✅ | ✅ |
 | s02 | Tool Use | ✅ | ✅ | ✅ |
 | s03 | Todo Write | ✅ | ⏳ | ✅ |
-| s04 | Subagent | ✅ | ⏳ | ⏳ |
+| s04 | Subagent | ✅ | ⏳ | ✅ |
 | s05 | Skill Loading | ✅ | ⏳ | ✅ |
 | s06 | Context Compact | ✅ | ⏳ | ✅ |
 | s07 | Task System | ✅ | ⏳ | ✅ |
 | s08 | Background Tasks | ✅ | ⏳ | ✅ |
-| s09 | Agent Teams | ✅ | ⏳ | ⏳ |
-| s10 | Team Protocols | ✅ | ⏳ | ⏳ |
+| s09 | Agent Teams | ✅ | ⏳ | ✅ |
+| s10 | Team Protocols | ✅ | ⏳ | ✅ |
 | s11 | Autonomous Agents | ✅ | ⏳ | ✅ |
 | s12 | Worktree Isolation | ❌ 原仓库无 | - | - |
 
-**当前进度：11/12 模块**（s12 原仓库不存在）
+**当前进度：11/12 模块代码 + 11/12 模块笔记**（s12 原仓库不存在）
 
 ---
 
@@ -365,25 +365,10 @@ MIT
 
 ## ⏳ 待补充内容
 
-以下模块的注解版本和笔记待补充：
+以下模块的注解版本待补充：
 
-### s04：子 Agent (Subagent)
-**文件：** `s04_subagent.py` | `s04_notes.md` ✅
-- ✅ 代码已下载
-- ✅ 笔记已写
-- ⏳ 注解版待补充
-
-### s09：Agent 团队协作 (Agent Teams)
-**文件：** `s09_agent_teams.py` | `s09_notes.md`
-- ✅ 代码已下载
-- ⏳ 笔记待写
-- ⏳ 注解版待补充
-
-### s10：团队协议 (Team Protocols)
-**文件：** `s10_team_protocols.py` | `s10_notes.md`
-- ✅ 代码已下载
-- ⏳ 笔记待写
-- ⏳ 注解版待补充
+### s03-s11：注解版待补充
+**状态：** 所有代码和笔记已完成，注解版（`*_annotated.py`）原仓库只有 s01/s02 有提供
 
 ### s12：工作树隔离 (Worktree Isolation)
 **状态：** 原仓库不存在此文件，可能已移除或合并到其他模块
