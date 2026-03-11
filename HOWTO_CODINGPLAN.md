@@ -1,5 +1,15 @@
 # 修改 learn-claude-code 使用阿里 CodingPlan API
 
+## ✅ 已完成修改
+
+| 模块 | 原始文件 | OpenAI 版本 | 状态 |
+|------|---------|-----------|------|
+| s01 | s01_agent_loop.py | s01_agent_loop_openai.py | ✅ 完成 |
+| s02 | s02_tool_use.py | s02_tool_use_openai.py | ✅ 完成 |
+| s03 | s03_todo_write.py | s03_todo_write_openai.py | ✅ 完成 |
+| s04 | s04_subagent.py | ⏳ 待创建 | ⏳ 进行中 |
+| s05-s11 | ... | ⏳ 待创建 | ⏳ 待开始 |
+
 ## 📋 修改清单
 
 ### 1. 安装依赖
