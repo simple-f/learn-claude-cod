@@ -7,8 +7,9 @@
 | s01 | s01_agent_loop.py | s01_agent_loop_openai.py | ✅ 完成 |
 | s02 | s02_tool_use.py | s02_tool_use_openai.py | ✅ 完成 |
 | s03 | s03_todo_write.py | s03_todo_write_openai.py | ✅ 完成 |
-| s04 | s04_subagent.py | ⏳ 待创建 | ⏳ 进行中 |
-| s05-s11 | ... | ⏳ 待创建 | ⏳ 待开始 |
+| s04 | s04_subagent.py | s04_subagent_openai.py | ✅ 完成 |
+| s05 | s05_skill_loading.py | ⏳ 待创建 | ⏳ 进行中 |
+| s06-s11 | ... | ⏳ 待创建 | ⏳ 待开始 |
 
 ## 📋 修改清单
 
