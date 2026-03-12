@@ -24,18 +24,19 @@ except ImportError:
 class VectorDatabase:
     """FAISS 向量数据库"""
     
-    def __init__(self, db_path: str):
+    def __init__(self, db_path: str, dimension: int = 384):
         """
         初始化向量数据库
         
         参数:
             db_path: 数据库路径
+            dimension: 向量维度（默认 384，all-MiniLM-L6-v2 的维度）
         """
         self.db_path = Path(db_path)
         self.db_path.mkdir(parents=True, exist_ok=True)
         
         # 向量维度（由 embedding 模型决定）
-        self.dimension = 384  # all-MiniLM-L6-v2 的维度
+        self.dimension = dimension
         
         # 初始化 FAISS 索引
         self.index = None

@@ -32,7 +32,16 @@ class RAGRetriever:
         """
         self.config = config
         self.embedder = TextEmbedder(config.embedding_model)
-        self.vector_db = VectorDatabase(config.vector_db_path)
+        
+        # 动态获取向量维度
+        try:
+            # 尝试获取模型的维度
+            test_embedding = self.embedder.encode(["test"])[0]
+            dimension = len(test_embedding)
+        except:
+            dimension = 384  # 默认维度
+        
+        self.vector_db = VectorDatabase(config.vector_db_path, dimension)
         self.documents = []
     
     def load_documents(self, knowledge_path: str):

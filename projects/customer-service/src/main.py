@@ -14,6 +14,7 @@
 
 import asyncio
 import sys
+import logging
 from pathlib import Path
 
 # 添加项目根目录到 Python 路径
@@ -21,6 +22,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from src.agent import CustomerServiceAgent
 from src.config import Config
+
+# 配置日志
+logger = logging.getLogger(__name__)
 
 
 async def main():
@@ -31,14 +35,18 @@ async def main():
     
     # 1. 加载配置
     config = Config.load()
+    config.setup_logging()  # 配置日志系统
+    logger.info(f"配置加载成功：{config.log_level}")
     print(f"✅ 配置加载成功：{config.log_level}")
     
     # 2. 初始化 Agent
     agent = CustomerServiceAgent(config)
+    logger.info("Agent 初始化成功")
     print("✅ Agent 初始化成功")
     
     # 3. 加载知识库
     agent.load_knowledge(config.knowledge_path)
+    logger.info(f"知识库加载成功：{config.knowledge_path}")
     print(f"✅ 知识库加载成功")
     
     # 4. 开始对话
@@ -55,6 +63,7 @@ async def main():
             
             # 退出命令
             if user_input.lower() in ["quit", "exit", "bye"]:
+                logger.info("用户退出对话")
                 print("\n👋 再见！")
                 break
             
@@ -62,20 +71,31 @@ async def main():
             if not user_input:
                 continue
             
+            logger.info(f"用户输入：{user_input}")
+            
             # 5. 处理对话
             print("🤖 客服：", end="", flush=True)
             answer = await agent.chat(user_id, user_input)
             print()  # 换行
             
+            logger.info(f"回答：{answer[:100]}...")
+            
         except KeyboardInterrupt:
+            logger.info("用户中断对话")
             print("\n\n👋 中断退出")
             break
         except Exception as e:
+            logger.error(f"对话错误：{e}", exc_info=True)
             print(f"\n❌ 错误：{e}")
     
     print("\n" + "=" * 60)
     print("感谢使用智能客服系统！")
     print("=" * 60)
+    
+    # 输出统计信息
+    stats = agent.get_stats()
+    logger.info(f"对话统计：{stats}")
+    print(f"\n📊 对话统计：{stats['total_queries']} 次询问，{stats['successful_queries']} 次成功，{stats['failed_queries']} 次失败")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,42 @@
+version: '3.8'
+
+services:
+  customer-service:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - VECTOR_DB_PATH=/app/data/vector_db
+      - KNOWLEDGE_PATH=/app/data/knowledge
+      - LOG_LEVEL=INFO
+      - WEB_PORT=8000
+      - SESSION_TIMEOUT=3600
+      - MAX_CONTEXT_LENGTH=4000
+      - STREAM_DELAY=100
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # 可选：Redis 用于 Session 存储
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  redis_data:

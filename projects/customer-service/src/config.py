@@ -7,6 +7,7 @@
 """
 
 import os
+import logging
 from pathlib import Path
 from typing import Optional
 from dotenv import load_dotenv
@@ -67,12 +68,29 @@ class Config:
     def validate(self) -> bool:
         """验证配置"""
         if not self.openai_api_key:
-            raise ValueError("OPENAI_API_KEY 未配置")
+            logger.warning("OPENAI_API_KEY 未配置，将使用模拟响应")
         
         if not Path(self.knowledge_path).exists():
             raise ValueError(f"知识库路径不存在：{self.knowledge_path}")
         
         return True
+    
+    def setup_logging(self):
+        """配置日志系统"""
+        log_file = Path(self.log_path) / "app.log"
+        log_file.parent.mkdir(parents=True, exist_ok=True)
+        
+        logging.basicConfig(
+            level=getattr(logging, self.log_level.upper(), logging.INFO),
+            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+            handlers=[
+                logging.FileHandler(log_file, encoding='utf-8'),
+                logging.StreamHandler()
+            ]
+        )
+        
+        logger = logging.getLogger(__name__)
+        logger.info(f"日志系统已初始化，级别：{self.log_level}")
     
     def __str__(self) -> str:
         """字符串表示"""

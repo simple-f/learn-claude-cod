@@ -10,6 +10,7 @@
 """
 
 import asyncio
+import logging
 from typing import Dict, List, Optional
 from pathlib import Path
 
@@ -18,6 +19,16 @@ from .rag.retriever import RAGRetriever
 from .session.manager import SessionManager
 from .intent.rule_matcher import RuleMatcher
 from .stream.output import StreamingOutput
+
+# 配置日志
+logger = logging.getLogger(__name__)
+
+try:
+    from openai import AsyncOpenAI
+    OPENAI_AVAILABLE = True
+except ImportError:
+    OPENAI_AVAILABLE = False
+    logger.warning("OpenAI 库未安装，将使用模拟响应")
 
 
 class CustomerServiceAgent:
@@ -35,6 +46,12 @@ class CustomerServiceAgent:
         self.session_manager = SessionManager(config)
         self.intent_matcher = RuleMatcher()
         self.output = StreamingOutput(config)
+        
+        # 初始化 OpenAI 客户端
+        if OPENAI_AVAILABLE and config.openai_api_key:
+            self.client = AsyncOpenAI(api_key=config.openai_api_key)
+        else:
+            self.client = None
         
         # 统计信息
         self.stats = {
@@ -172,15 +189,33 @@ class CustomerServiceAgent:
         返回:
             AI 生成的答案
         """
-        # 这里应该调用 OpenAI API
-        # 简化实现：返回示例答案
-        
-        await asyncio.sleep(0.5)  # 模拟 API 延迟
-        
-        # 示例答案
-        answer = "您好，感谢您的咨询。关于您的问题，我会尽快为您解答。请稍等，我为您查询相关信息。"
-        
-        return answer
+        try:
+            if self.client:
+                # 调用 OpenAI API
+                logger.info("调用 OpenAI API...")
+                response = await self.client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {"role": "system", "content": "你是一个专业的电商客服助手。请用专业、友好、简洁的语气回答用户问题。如果不知道答案，请诚实告知，不要编造信息。"},
+                        {"role": "user", "content": prompt}
+                    ],
+                    max_tokens=500,
+                    temperature=0.7
+                )
+                answer = response.choices[0].message.content
+                logger.info(f"OpenAI API 响应：{len(answer)} 字符")
+            else:
+                # 模拟响应（用于测试）
+                logger.warning("使用模拟响应（未配置 OpenAI API）")
+                await asyncio.sleep(0.5)
+                answer = "您好，感谢您的咨询。关于您的问题，我会尽快为您解答。请稍等，我为您查询相关信息。"
+            
+            return answer
+            
+        except Exception as e:
+            logger.error(f"LLM 调用失败：{e}", exc_info=True)
+            # 降级处理：返回友好提示
+            return "抱歉，系统暂时无法回答您的问题。请稍后再试或联系人工客服。"
     
     def get_stats(self) -> Dict:
         """获取统计信息"""
