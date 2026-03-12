@@ -41,15 +41,6 @@ Teammate (s09):  spawn -> work -> idle -> work -> ... -> shutdown
     | ... runs tools   |      | ... waits ...    |
     | status -> idle   |      |                  |
     +------------------+      +------------------+
-
-    5 message types (所有声明的消息类型):
-    +-------------------------+-----------------------------------+
-    | message                 | 普通文本消息                      |
-    | broadcast               | 发送给所有队友                    |
-    | shutdown_request        | 请求优雅关闭 (s10)                |
-    | shutdown_response       | 批准/拒绝关闭 (s10)               |
-    | plan_approval_response  | 批准/拒绝计划 (s10)               |
-    +-------------------------+-----------------------------------+
 ```
 
 ---
@@ -60,184 +51,114 @@ Teammate (s09):  spawn -> work -> idle -> work -> ... -> shutdown
 
 ```python
 class MessageBus:
-    def __init__(self, inbox_dir: Path):
-        self.dir = inbox_dir
-        self.dir.mkdir(parents=True, exist_ok=True)
-
-    def send(self, sender: str, to: str, content: str,
-             msg_type: str = "message", extra: dict = None) -> str:
-        # 验证消息类型
-        if msg_type not in VALID_MSG_TYPES:
-            return f"Error: Invalid type '{msg_type}'. Valid: {VALID_MSG_TYPES}"
-        
-        # 构建消息对象
-        msg = {
-            "type": msg_type,
-            "from": sender,
-            "content": content,
-            "timestamp": time.time(),
-        }
-        if extra:
-            msg.update(extra)
-        
-        # 追加写入收件箱（JSONL 格式）
-        inbox_path = self.dir / f"{to}.jsonl"
-        with open(inbox_path, "a") as f:
-            f.write(json.dumps(msg) + "\n")
-        return f"Sent {msg_type} to {to}"
-
-    def read_inbox(self, name: str) -> list:
-        inbox_path = self.dir / f"{name}.jsonl"
+    def __init__(self, team_dir: Path):
+        self.inbox_dir = team_dir / "inbox"
+        self.inbox_dir.mkdir(parents=True, exist_ok=True)
+    
+    def send(self, recipient: str, content: str):
+        """发送消息到队友信箱"""
+        inbox_path = self.inbox_dir / f"{recipient}.jsonl"
+        with open(inbox_path, "a", encoding="utf-8") as f:
+            f.write(json.dumps({"content": content}) + "\n")
+    
+    def read(self, recipient: str) -> list:
+        """读取并清空信箱"""
+        inbox_path = self.inbox_dir / f"{recipient}.jsonl"
         if not inbox_path.exists():
             return []
         
-        # 读取所有消息
-        messages = []
-        for line in inbox_path.read_text().strip().splitlines():
-            if line:
-                messages.append(json.loads(line))
+        with open(inbox_path, "r", encoding="utf-8") as f:
+            messages = [json.loads(line) for line in f]
         
-        # 清空收件箱（drain 模式）
-        inbox_path.write_text("")
+        # 清空信箱（drain 模式）
+        open(inbox_path, "w").close()
+        
         return messages
 ```
 
-**关键设计：**
-- JSONL 格式（每行一个 JSON 对象）
-- 追加写入（不覆盖历史消息）
-- 读取后清空（drain 模式）
-- 文件锁（隐含，Python 文件操作是原子的）
-
-### 2. 队友线程（第 115-165 行）
+### 2. 队友配置（第 15-35 行）
 
 ```python
-def spawn_teammate(name: str, role: str, team: str = "default"):
-    """Spawn a teammate thread with its own agent loop."""
+TEAM_CONFIG = {
+    "team_name": "default",
+    "members": [
+        {"name": "alice", "role": "coder", "status": "idle"},
+        {"name": "bob", "role": "reviewer", "status": "idle"},
+        {"name": "lead", "role": "manager", "status": "idle"},
+    ]
+}
+```
+
+### 3. 队友循环（第 115-165 行）
+
+```python
+def teammate_loop(name: str, role: str, system: str):
+    """队友的独立循环"""
+    messages = [{"role": "system", "content": system}]
     
-    def teammate_loop():
-        messages = []  # 每个队友有自己的对话历史
-        status = "idle"
+    while True:
+        # 检查信箱
+        inbox_messages = message_bus.read(name)
         
-        while True:
-            # 1. 检查收件箱
-            inbox_messages = BUS.read_inbox(name)
-            if inbox_messages:
-                # 处理收件箱消息
-                for msg in inbox_messages:
-                    if msg["type"] == "message":
-                        messages.append({"role": "user", "content": msg["content"]})
-                    elif msg["type"] == "shutdown_request":
-                        # 处理关闭请求（s10）
-                        pass
+        if inbox_messages:
+            # 有新消息，处理
+            for msg in inbox_messages:
+                messages.append({"role": "user", "content": msg["content"]})
             
-            # 2. 如果没有消息，等待一下
-            if not inbox_messages:
-                time.sleep(1)
-                continue
+            # 调用 LLM
+            response = client.messages.create(...)
             
-            # 3. 调用 LLM
-            response = client.messages.create(
-                model=MODEL,
-                system=f"You are '{name}', role: {role}, team: {team}.",
-                messages=messages,
-                tools=TEAMMATE_TOOLS,
-                max_tokens=8000,
-            )
-            messages.append({"role": "assistant", "content": response.content})
-            
-            # 4. 执行工具调用
+            # 可能回复其他队友
             if response.stop_reason == "tool_use":
-                status = "working"
-                # ... 执行工具 ...
-                status = "idle"
-    
-    # 启动线程
-    thread = threading.Thread(target=teammate_loop, daemon=True)
-    thread.start()
-    return thread
+                # 执行工具调用
+                ...
 ```
-
-**关键设计：**
-- 每个队友是独立的线程
-- 有自己的 `messages` 列表（对话历史）
-- 轮询收件箱（1 秒间隔）
-- 状态追踪（idle / working）
-
-### 3. 广播功能（第 98-105 行）
-
-```python
-def broadcast(self, sender: str, content: str, teammates: list) -> str:
-    count = 0
-    for name in teammates:
-        if name != sender:
-            self.send(sender, name, content, "broadcast")
-            count += 1
-    return f"Broadcast to {count} teammates"
-```
-
-**使用场景：**
-- 团队公告
-- 任务完成通知
-- 紧急 shutdown
 
 ---
 
 ## 💡 学习要点
 
-### 1. 理解持久化通信
+### 1. 理解 JSONL 信箱
 
-**Subagent (s04) 通信：**
-```
-Parent → Subagent: 函数参数（prompt）
-Subagent → Parent: 返回值（字符串）
-一次性，同步，用完即弃
-```
+**为什么用 JSONL 而不是数据库？**
 
-**Teammate (s09) 通信：**
-```
-Any → Teammate: 写入 JSONL 文件
-Teammate → Any: 写入 JSONL 文件
-持久化，异步，可追踪
-```
+```python
+# ✅ JSONL 格式
+{"content": "fix bug in login.py"}
+{"content": "review completed", "status": "done"}
 
-**好处：**
-- 消息不会丢失（文件持久化）
-- 可以异步通信（发送者不等待）
-- 可以审计历史（查看 JSONL 文件）
+# 好处：
+# - 简单，无需额外依赖
+# - 人类可读
+# - 支持追加（append）
+# - 易于清空（drain）
+```
 
 ### 2. 理解 Drain 模式
 
 ```python
-def read_inbox(name: str) -> list:
-    # 读取所有消息
-    messages = [...]
-    # 清空收件箱
-    inbox_path.write_text("")
+def read(self, recipient: str) -> list:
+    messages = [json.loads(line) for line in f]
+    open(inbox_path, "w").close()  # 清空
     return messages
 ```
 
-**为什么清空？**
-- 避免重复处理
-- 保持文件大小可控
-- 类似"已读"标记
+**为什么读取后清空？**
 
-### 3. 理解消息类型
-
-**当前支持的类型：**
-```python
-VALID_MSG_TYPES = {
-    "message",              # 普通消息
-    "broadcast",            # 广播消息
-    "shutdown_request",     # 关闭请求
-    "shutdown_response",    # 关闭响应
-    "plan_approval_response", # 计划审批
-}
+```
+防止重复处理：
+- 消息处理完后，不应该再次处理
+- 清空确保每条消息只处理一次
+- 类似消息队列的 ack 机制
 ```
 
-**扩展性：**
-- 添加新类型只需修改 `VALID_MSG_TYPES`
-- 接收方根据 `type` 字段决定如何处理
-- 类似"协议"设计
+### 3. 理解角色分工
+
+| 角色 | 职责 | 工具权限 |
+|------|------|----------|
+| **coder** | 编写代码 | bash, read, write, edit |
+| **reviewer** | 代码审查 | read, comment |
+| **manager** | 任务分配 | task, spawn |
 
 ---
 
@@ -245,40 +166,150 @@ VALID_MSG_TYPES = {
 
 | 维度 | learn-claude-code s09 | OpenClaw |
 |------|----------------------|----------|
-| **通信方式** | JSONL 文件 | Feishu 消息 + sessions_send |
-| **持久化** | 文件自动持久化 | session 文件持久化 |
-| **异步性** | 完全异步（轮询） | 异步（事件驱动） |
-| **队友数量** | 动态创建 | 固定（ai1/ai2/ai3） |
-| **消息类型** | 5 种声明类型 | 自由格式 |
-| **生命周期** | 线程（进程内） | 独立进程/服务 |
+| **通信方式** | JSONL 文件信箱 | 飞书消息 + A2A 路由 |
+| **队友持久化** | 线程 + 文件 | 独立进程 + Session |
+| **消息类型** | 5 种（文本/broadcast/shutdown 等） | Handoff 5 件套 |
+| **角色系统** | 简单（coder/reviewer/manager） | 复杂（38+ 技能） |
 
-**OpenClaw 的差异：**
-- OpenClaw 用 Feishu 作为通信通道（外部 IM）
-- OpenClaw 的 Agent 是独立进程（不是线程）
-- OpenClaw 有 A2A 路由器（基于@mention）
+**OpenClaw 的改进：**
+- 跨进程通信（飞书 API）
+- 消息路由（A2A router）
+- 深度限制和循环检测
 
-**可以借鉴的点：**
-- 添加内部消息队列（类似 inbox）
-- 实现广播机制
-- 消息类型标准化
+---
+
+## 🔬 深度技术解析
+
+### 1. 为什么用文件信箱而不是内存队列？
+
+**详细原理：**
+
+这是**持久化和解耦**的设计。
+
+**对比多种方案：**
+
+```python
+# ❌ 方案 1：内存队列
+queue = Queue()
+queue.put(message)
+
+# 问题：
+# - 进程重启后丢失
+# - 难以调试（看不到历史）
+# - 难以并发（需要锁）
+
+# ❌ 方案 2：数据库
+db.insert("messages", {...})
+
+# 问题：
+# - 需要额外依赖
+# - 过于复杂
+
+# ✅ 方案 3：JSONL 文件
+with open("alice.jsonl", "a") as f:
+    f.write(json.dumps(msg) + "\n")
+
+# 好处：
+# - 持久化（重启不丢失）
+# - 人类可读（便于调试）
+# - 无需依赖
+# - 支持并发（追加安全）
+```
+
+**实际效果：**
+
+```
+.team/inbox/
+  alice.jsonl  # 即使程序崩溃，消息还在
+  bob.jsonl
+  lead.jsonl
+```
+
+---
+
+### 2. 为什么用 drain 模式？
+
+**详细原理：**
+
+这是**消息确认（ack）**的简化实现。
+
+**对比多种方案：**
+
+```python
+# ❌ 方案 1：不删除（只读）
+# 问题：消息会重复处理
+
+# ❌ 方案 2：逐条确认
+for msg in messages:
+    process(msg)
+    ack(msg_id)  # 复杂
+
+# ✅ 方案 3：批量清空（drain）
+messages = read_all()
+process_all(messages)
+clear()  # 简单高效
+```
+
+**为什么适合 Agent？**
+
+```
+Agent 工作模式：
+1. 醒来（被@或心跳）
+2. 读取所有消息
+3. 批量处理
+4. 清空信箱
+5. 继续工作或睡觉
+
+简单、高效、不易出错。
+```
+
+---
+
+### 3. 为什么限制 5 种消息类型？
+
+**详细原理：**
+
+这是**协议简化**的设计。
+
+**消息类型：**
+
+| 类型 | 用途 | 示例 |
+|------|------|------|
+| `message` | 普通文本 | "fix bug in login.py" |
+| `broadcast` | 群发消息 | "所有人开会" |
+| `shutdown_request` | 请求关闭 | "可以下班了" |
+| `shutdown_response` | 响应关闭 | "好的，保存中..." |
+| `plan_approval_response` | 计划审批 | "计划批准" |
+
+**为什么是这 5 种？**
+
+```
+覆盖场景：
+- 日常工作：message
+- 团队通知：broadcast
+- 生命周期管理：shutdown_request/response
+- 任务协调：plan_approval_response
+
+更多类型会增加复杂度，这 5 种已足够。
+```
 
 ---
 
 ## 📝 练习题
 
-1. **添加消息优先级**：urgent/normal/low，优先处理 urgent
-2. **实现消息确认**：接收方回复 ACK，发送方知道消息已读
-3. **添加群聊支持**：一个消息发送给多个队友（群组）
-4. **对比 OpenClaw**：我们的飞书消息和 s09 有什么区别？
+1. **添加消息优先级**：urgent/normal/low
+2. **实现消息过期**：超过 1 小时自动删除
+3. **添加消息确认**：接收者确认后删除
+4. **对比 OpenClaw**：分析 A2A 消息格式
 
 ---
 
 ## 🔗 下一步
 
-- **s10 Team Protocols** - 关闭协议 + 计划审批协议
-- **OpenClaw A2A 系统** - 查看 `docs/A2A-SUMMARY.md`
-- **s11 Autonomous Agents** - 自主 Agent（空闲时主动找任务）
+- **s10 Team Protocols** - 团队协议（关闭流程、计划审批）
+- **s11 Autonomous Agents** - 自主任务认领
+- **s12 Worktree Isolation** - 工作树隔离
 
 ---
 
-*参考：OpenClaw 的 A2A 路由和 sessions_send 机制*
+*参考：OpenClaw 的 A2A 路由器和 Handoff 协议*
