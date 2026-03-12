@@ -6,6 +6,25 @@
 
 ---
 
+## 📚 学习来源
+
+**本项目基于：**
+- [shareAI-lab/learn-claude-code](https://github.com/shareAI-lab/learn-claude-code) - 原始 12 课教程（24.8k⭐）
+- [OpenClaw](https://github.com/openclaw/openclaw) - 生产级 Agent 系统实战经验
+
+**增强内容：**
+- ✅ **深度技术解析** - 每个课程新增"为什么这样设计"的原理说明
+- ✅ **对比分析** - 与 LangChain/AutoGen/CrewAI/OpenClaw 对比
+- ✅ **实战项目** - 智能客服系统（8 课完整教程 + LangChain 对比）
+- ✅ **Final Agent** - 集大成的完整 Agent 系统
+
+**学习路径：**
+1. 先学原始课程（s01-s12 代码 + 笔记）
+2. 再读深度解析（理解设计原理）
+3. 最后做实战项目（智能客服系统 + Final Agent）
+
+---
+
 ## 🎯 核心模式
 
 ```
