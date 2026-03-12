@@ -1,0 +1,15 @@
+# LangChain 版本依赖
+# 安装：pip install -r requirements-langchain.txt
+
+# LangChain 核心
+langchain>=0.1.0
+langchain-community>=0.0.10
+
+# LLM
+openai>=1.0.0
+
+# 向量数据库
+faiss-cpu>=1.7.4
+
+# 工具
+python-dotenv>=1.0.0
