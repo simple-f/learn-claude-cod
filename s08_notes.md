@@ -17,8 +17,6 @@
 | ...             |        | ...             |
 | [LLM call] <---+------- | enqueue(result) |
 |  ^drain queue   |        +-----------------+
-+-----------------+
-
 时间线：
 Agent ----[spawn A]----[spawn B]----[other work]----
              |              |
@@ -59,142 +57,87 @@ def run(self, command: str) -> str:
 - 守护线程（daemon=True）
 - 命令截断显示（前 80 字符）
 
-### 2. 执行任务（后台线程）
+### 2. 执行任务
 
 ```python
 def _execute(self, task_id: str, command: str):
-    """Thread target: run subprocess, capture output, push to queue."""
+    """Execute command in background, store result."""
     try:
-        r = subprocess.run(
-            command, shell=True, cwd=WORKDIR,
-            capture_output=True, text=True, timeout=300  # 5 分钟超时
+        result = subprocess.run(
+            command, shell=True, capture_output=True, 
+            text=True, timeout=300  # 5 分钟超时
         )
-        output = (r.stdout + r.stderr).strip()[:50000]
-        status = "completed"
+        self.tasks[task_id] = {
+            "status": "completed",
+            "result": result.stdout or result.stderr,
+            "command": command
+        }
     except subprocess.TimeoutExpired:
-        output = "Error: Timeout (300s)"
-        status = "timeout"
-    except Exception as e:
-        output = f"Error: {e}"
-        status = "error"
-    
-    # 更新任务状态
-    self.tasks[task_id]["status"] = status
-    self.tasks[task_id]["result"] = output or "(no output)"
-    
-    # 推送到通知队列（主线程会来取）
-    with self._lock:
-        self._notification_queue.append({
-            "task_id": task_id,
-            "status": status,
-            "command": command[:80],
-            "result": (output or "(no output)")[:500],  # 只通知前 500 字符
-        })
+        self.tasks[task_id] = {
+            "status": "timeout",
+            "result": "Task timed out after 5 minutes"
+        }
 ```
 
-**关键设计：**
-- 300 秒超时（5 分钟）
-- 输出截断（50000 字符）
-- 通知队列（线程安全）
-
-### 3. 检查任务状态
-
-```python
-def check(self, task_id: str = None) -> str:
-    """Check status of one task or list all."""
-    if task_id:
-        t = self.tasks.get(task_id)
-        if not t:
-            return f"Error: Unknown task {task_id}"
-        return f"[{t['status']}] {t['command'][:60]}\n{t.get('result') or '(running)'}"
-    
-    # 列出所有任务
-    lines = []
-    for tid, t in self.tasks.items():
-        lines.append(f"{tid}: [{t['status']}] {t['command'][:60]}")
-    return "\n".join(lines) if lines else "No background tasks."
-```
-
-### 4. 排出通知队列
+### 3. 获取通知
 
 ```python
 def drain_notifications(self) -> list:
-    """Return and clear all pending completion notifications."""
-    with self._lock:
-        notifs = list(self._notification_queue)
-        self._notification_queue.clear()
-    return notifs
-```
-
-**主线程如何使用：**
-```python
-# 在调用 LLM 之前，先排出通知
-notifications = BG.drain_notifications()
-if notifications:
-    for notif in notifications:
-        messages.append({
-            "role": "user",
-            "content": f"Background task {notif['task_id']} completed: {notif['result']}"
-        })
+    """Get all completed tasks, clear queue."""
+    notifications = []
+    for task_id, task in self.tasks.items():
+        if task["status"] == "completed" and not task.get("notified"):
+            notifications.append(f"Task {task_id} completed: {task['result'][:200]}")
+            task["notified"] = True
+    return notifications
 ```
 
 ---
 
 ## 💡 学习要点
 
-### 1. 理解线程模型
+### 1. 理解异步执行
 
-```
-主线程（Agent Loop）          后台线程 1          后台线程 2
-      |                           |                  |
-      |-- spawn A --------------->|                  |
-      |                           |-- run command    |
-      |                           |                  |
-      |-- spawn B ---------------------------------->|
-      |                           |                  |-- run command
-      |                           |                  |
-      |-- do other work           |                  |
-      |                           |                  |
-      |<-- notification ----------+------------------+
-      |                           |                  |
-      |-- drain notifications     |                  |
-```
-
-**关键点：**
-- 主线程不等待
-- 多个后台任务并行
-- 通知队列解耦
-
-### 2. 理解线程安全
+**对比两种方案：**
 
 ```python
-self._lock = threading.Lock()
+# ❌ 方案 1：同步执行
+result = subprocess.run(command, timeout=300)
+# 阻塞 5 分钟，Agent 什么都做不了
 
-# 写入通知队列（后台线程）
-with self._lock:
-    self._notification_queue.append({...})
-
-# 读取通知队列（主线程）
-with self._lock:
-    notifs = list(self._notification_queue)
-    self._notification_queue.clear()
+# ✅ 方案 2：异步执行
+task_id = background_manager.run(command)
+# 立即返回，Agent 继续做其他事
+# 完成后通过 notification 获取结果
 ```
 
-**为什么需要锁？**
-- 避免同时读写导致数据损坏
-- Python 的 list 不是线程安全的
-- 简单但有效
-
-### 3. 理解超时处理
+### 2. 理解守护线程
 
 ```python
-timeout=300  # 5 分钟
+thread = threading.Thread(..., daemon=True)
 ```
 
-**为什么设置超时？**
-- 防止无限运行的任务
-- 释放线程资源
-- 给用户明确反馈
+**守护线程 vs 普通线程：**
+
+| 类型 | 主程序退出时 | 适用场景 |
+|------|-------------|----------|
+| **守护线程** | 自动终止 | 后台任务、监控 |
+| **普通线程** | 等待完成 | 关键任务、数据保存 |
+
+### 3. 理解通知机制
+
+```
+任务完成 → 标记 notified=False → drain_notifications → 标记 notified=True
+```
+
+**为什么需要 notified 标记？**
+
+```
+防止重复通知：
+- 任务完成后，Agent 可能不会立即处理
+- 下次循环时，不应该再次通知
+- notified 标记确保只通知一次
+```
 
 ---
 
@@ -202,39 +145,163 @@ timeout=300  # 5 分钟
 
 | 维度 | learn-claude-code s08 | OpenClaw |
 |------|----------------------|----------|
-| **后台执行** | threading.Thread | 无（同步执行） |
-| **通知机制** | 队列 + drain | 无 |
-| **超时控制** | 300 秒 | 120 秒（bash 工具） |
-| **并行度** | 多任务并行 | 单任务串行 |
-| **状态查询** | check 工具 | 无 |
+| **异步方式** | 线程池 | 心跳 + 定时任务 |
+| **通知方式** | 内存队列 | 飞书消息 |
+| **超时处理** | 5 分钟硬超时 | 可配置 |
+| **任务追踪** | 简单状态 | 完整任务系统 |
 
-**OpenClaw 的差异：**
-- OpenClaw 是同步执行（等待工具完成）
-- OpenClaw 的 Heartbeat 是定时触发（不是后台任务）
-- OpenClaw 可以借鉴 s08 实现并行任务
+**OpenClaw 的改进：**
+- 跨进程通知（飞书消息）
+- 任务持久化
+- 支持定时任务（Cron）
 
-**可以借鉴的点：**
-- 添加后台执行工具
-- 支持长时间运行的任务
-- 通知队列机制
+---
+
+## 🔬 深度技术解析
+
+### 1. 为什么用后台线程？
+
+**详细原理：**
+
+这是**非阻塞 I/O**的设计模式。
+
+**对比多种方案：**
+
+```python
+# ❌ 方案 1：同步执行
+result = run_command(command)  # 阻塞 5 分钟
+# 问题：Agent 无法响应其他请求
+
+# ❌ 方案 2：多进程
+process = multiprocessing.Process(target=run_command)
+# 问题：进程间通信复杂，资源开销大
+
+# ✅ 方案 3：多线程
+thread = threading.Thread(target=run_command)
+# 好处：
+# - 共享内存（易于通信）
+# - 资源开销小
+# - Python GIL 保护（线程安全）
+```
+
+**实际效果：**
+
+```
+时间线：
+Agent: [spawn A] → [继续工作] → [spawn B] → [继续工作] → [获取结果]
+          ↓                                    ↓
+       [A 运行 5 分钟]                      [B 运行 3 分钟]
+
+总时间：5 分钟（并行）
+vs
+总时间：8 分钟（串行）
+```
+
+---
+
+### 2. 为什么用 8 位短 ID？
+
+**详细原理：**
+
+这是**可读性和唯一性**的平衡。
+
+**UUID 格式对比：**
+
+```python
+# 完整 UUID（36 字符）
+"550e8400-e29b-41d4-a716-446655440000"
+
+# 8 位短 ID（8 字符）
+"550e8400"
+
+# 16 位短 ID（16 字符）
+"550e8400e29b41d4"
+```
+
+**碰撞概率计算：**
+
+```
+8 位十六进制 = 16^8 = 4,294,967,296 种可能
+
+生日悖论：
+- 1000 个任务：碰撞概率 ≈ 0.01%
+- 10000 个任务：碰撞概率 ≈ 1%
+- 100000 个任务：碰撞概率 ≈ 50%
+
+对于单次会话（通常<100 个任务），8 位足够安全。
+```
+
+**为什么不用更短？**
+
+```
+4 位：16^4 = 65536 种 → 容易碰撞
+6 位：16^6 = 16,777,216 种 → 可能碰撞
+8 位：16^8 = 4,294,967,296 种 → 安全
+```
+
+---
+
+### 3. 为什么需要超时？
+
+**详细原理：**
+
+这是**故障恢复**的设计。
+
+**不设置超时的问题：**
+
+```python
+# ❌ 没有超时
+result = subprocess.run(command)  # 可能永远卡住
+
+# 场景：
+# - 命令等待用户输入
+# - 网络请求超时
+# - 死锁
+
+# 结果：线程永久阻塞，资源泄露
+```
+
+**设置超时的好处：**
+
+```python
+# ✅ 设置超时
+result = subprocess.run(command, timeout=300)
+
+# 好处：
+# - 防止永久阻塞
+# - 自动释放资源
+# - 可预测的执行时间
+```
+
+**超时时间选择：**
+
+```
+典型任务：
+- 快速命令（ls, cat）：< 1 秒
+- 编译代码：30-60 秒
+- 运行测试：60-300 秒
+- 大数据处理：300+ 秒
+
+5 分钟（300 秒）是合理的默认值。
+```
 
 ---
 
 ## 📝 练习题
 
-1. **添加进度报告**：后台任务定期更新进度
-2. **添加取消功能**：`cancel(task_id)` 终止任务
-3. **添加重试机制**：失败的任务自动重试
-4. **对比 OpenClaw**：我们的 bash 工具和 s08 有什么区别？
+1. **添加任务取消**：实现 cancel(task_id) 方法
+2. **实现进度追踪**：后台任务报告进度
+3. **添加重试机制**：失败后自动重试
+4. **对比 OpenClaw**：分析心跳机制和后台任务的区别
 
 ---
 
 ## 🔗 下一步
 
-- **s11 Autonomous Agents** - 自主 Agent（后台执行 + 任务认领）
-- **OpenClaw sessions_spawn** - 对比子进程执行
-- **Python threading 文档** - 深入学习线程编程
+- **s09 Agent Teams** - 多 Agent 协作
+- **s10 Team Protocols** - 团队协议
+- **s11 Autonomous Agents** - 自主任务认领
 
 ---
 
-*参考：Python threading 模块和 subprocess 模块文档*
+*参考：OpenClaw 的 HEARTBEAT.md 和后台任务机制*
