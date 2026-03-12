@@ -1,0 +1,29 @@
+# Final Agent - Python 依赖
+
+# LLM API
+anthropic>=0.18.0
+openai>=1.0.0
+
+# 配置管理
+pyyaml>=6.0
+python-dotenv>=1.0.0
+
+# 异步支持
+aiohttp>=3.9.0
+
+# 工具库
+pydantic>=2.0.0
+
+# 测试
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+
+# 日志
+python-json-logger>=2.0.0
+
+# 监控
+prometheus-client>=0.19.0
+
+# 向量数据库（可选，用于 RAG）
+faiss-cpu>=1.7.4
+sentence-transformers>=2.2.2
