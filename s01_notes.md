@@ -116,6 +116,177 @@ def run_bash(command: str) -> str:
 3. **理解工具**：LLM 通过工具改变世界
 4. **理解反馈**：工具结果必须喂回 LLM
 
+---
+
+## 🔬 深度技术解析
+
+### 1. 为什么要把工具结果加回 messages？
+
+**详细原理：**
+
+LLM 是**无状态**的。这意味着它每次调用都是"全新的"，不知道之前发生了什么。
+
+```
+错误示范（不加结果）：
+第 1 次调用：
+你："执行命令 ls"
+LLM: {"tool_use": "bash", "command": "ls"}
+
+第 2 次调用（如果不加结果）：
+你："执行命令 ls"
+LLM: {"tool_use": "bash", "command": "ls"}  # 完全一样！
+```
+
+**正确的流程：**
+
+```
+第 1 次调用：
+你："执行命令 ls"
+LLM: {"tool_use": "bash", "command": "ls"}
+
+你："工具执行结果是：file1.txt, file2.txt"  ← 关键！
+LLM: "好的，目录中有两个文件"  # 现在它知道了
+```
+
+**这就是 ReAct 模式的核心：**
+
+```
+Reason（推理）→ Act（行动）→ Observe（观察）→ Reason（推理）→ ...
+```
+
+每次循环都要把观察结果告诉 LLM，它才能判断任务是否完成、决定下一步做什么。
+
+**类比人类思考：**
+
+```
+你："我要写一个 Python 脚本"
+   ↓
+打开编辑器（行动）
+   ↓
+看到空白屏幕（观察）← 如果没有这一步，你就不知道屏幕是空白的
+   ↓
+"好的，现在开始写代码"（新的推理）
+```
+
+**常见错误：**
+
+```python
+# ❌ 错误：执行了工具但不告诉 LLM
+for block in response.content:
+    if block.type == "tool_use":
+        run_bash(block.input["command"])
+        # 忘记把结果加回去
+
+# ✅ 正确：执行后必须反馈
+for block in response.content:
+    if block.type == "tool_use":
+        result = run_bash(block.input["command"])
+        results.append({"type": "tool_result", "content": result})
+
+messages.append({"role": "user", "content": results})
+```
+
+---
+
+### 2. stop_reason 状态机原理
+
+**为什么 `stop_reason != "tool_use"` 就返回？**
+
+Anthropic API 的 `stop_reason` 有几种可能的值：
+
+| stop_reason | 含义 | 应该怎么做 |
+|-------------|------|------------|
+| `tool_use` | LLM 想调用工具 | 执行工具，继续循环 |
+| `end_turn` | LLM 说完了 | 返回结果，结束 |
+| `max_tokens` | 达到 token 限制 | 截断或继续 |
+| `stop_sequence` | 遇到停止序列 | 结束 |
+
+**状态机图示：**
+
+```
+         ┌──────────────┐
+         │  开始循环    │
+         └──────┬───────┘
+                │
+         ┌──────▼───────┐
+         │ 调用 LLM     │
+         └──────┬───────┘
+                │
+         ┌──────▼───────┐
+    ┌────│ stop_reason? │────┐
+    │    └──────┬───────┘    │
+    │           │            │
+tool_use     end_turn     max_tokens
+    │           │            │
+    │           ▼            ▼
+执行工具    返回结果     继续或截断
+    │
+    ▼
+继续循环
+```
+
+**为什么这样设计？**
+
+这是**最小权限原则**：
+- LLM 默认是"助手"，不是"执行者"
+- 它必须明确说"我要调用工具"
+- 它说"完成了"就停止
+
+---
+
+### 3. max_tokens 设置的最佳实践
+
+**为什么 max_tokens 设为 8000？**
+
+`max_tokens` 是 LLM 单次响应的**最大输出长度**。
+
+**计算方式：**
+
+```
+1 个 token ≈ 4 个英文字符 ≈ 2 个汉字
+
+8000 tokens ≈ 32000 英文字符 ≈ 16000 汉字
+```
+
+**为什么是 8000？**
+
+这是 Claude 3.5 Sonnet 的**推荐值**：
+
+| 模型 | 最大输出 tokens | 推荐 max_tokens |
+|------|----------------|-----------------|
+| Claude 3 Haiku | 4096 | 4000 |
+| Claude 3 Sonnet | 4096 | 4000 |
+| Claude 3 Opus | 4096 | 4000 |
+| Claude 3.5 Sonnet | 8192 | 8000 |
+
+**设置太小的问题：**
+
+```python
+# ❌ 太小：可能被截断
+max_tokens=1000
+
+# LLM 正在写代码，写到一半：
+# "def calculate_sum(numbers):
+#     total = 0
+#     for n in numbers:
+#         total += ... [截断]"
+```
+
+**设置太大的问题：**
+
+```python
+# ❌ 太大：浪费钱 + 时间长
+max_tokens=100000
+
+# LLM 可能啰嗦半天，你还要为多余的 tokens 付费
+```
+
+**最佳实践：**
+
+- **简单任务**（问答）：1000-2000
+- **中等任务**（代码生成）：4000-8000
+- **复杂任务**（长文档）：8000+
+
 ## 📝 练习题
 
 1. 修改 `run_bash`，添加命令白名单模式

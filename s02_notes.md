@@ -124,6 +124,175 @@ LLM 调用 → 工具名 → 字典查找 → 执行函数 → 返回结果
 
 ---
 
+## 🔬 深度技术解析
+
+### 1. 为什么用字典做工具分发？
+
+**详细原理：**
+
+这是**策略模式**的简化实现，利用字典的 O(1) 查找特性。
+
+**替代方案对比：**
+
+```python
+# ❌ 方案 1：if-else 链
+if tool_name == "bash":
+    result = run_bash(...)
+elif tool_name == "read_file":
+    result = run_read(...)
+elif tool_name == "write_file":
+    result = run_write(...)
+# ... 每加一个工具就多一层
+
+# ❌ 方案 2：match-case（Python 3.10+）
+match tool_name:
+    case "bash":
+        result = run_bash(...)
+    case "read_file":
+        result = run_read(...)
+    # ... 还是冗长
+
+# ✅ 方案 3：字典查找
+handler = TOOL_HANDLERS.get(tool_name)
+if handler:
+    result = handler(**params)
+```
+
+**性能对比：**
+
+| 方面 | if-else | match-case | 字典 |
+|------|---------|------------|------|
+| **查找速度** | O(n) | O(n) | O(1) |
+| **代码行数** | 多 | 中 | 少 |
+| **扩展性** | 差 | 中 | 好 |
+| **可读性** | 中 | 好 | 好 |
+
+**为什么用 lambda？**
+
+```python
+# ❌ 直接存函数引用
+TOOL_HANDLERS = {
+    "bash": run_bash,  # 问题：参数不匹配
+}
+
+# LLM 调用时传的是 kwargs：{"command": "ls"}
+# 但 run_bash 需要的是 positional：run_bash(command)
+
+# ✅ 用 lambda 包装
+TOOL_HANDLERS = {
+    "bash": lambda **kw: run_bash(kw["command"]),
+}
+
+# 现在可以统一调用：handler(**kwargs)
+```
+
+---
+
+### 2. safe_path 防路径逃逸攻击
+
+**详细原理：**
+
+这是**路径穿越攻击**（Path Traversal Attack）的防御。
+
+**攻击场景：**
+
+```python
+# 用户（或恶意 LLM）输入：
+path = "../../../etc/passwd"
+
+# 如果没有检查：
+WORKDIR = "/app/workspace"
+full_path = WORKDIR / path
+# 结果："/app/workspace/../../../etc/passwd"
+#       = "/etc/passwd"  ← 访问了系统文件！
+```
+
+**safe_path 的工作原理：**
+
+```python
+# 1. 拼接路径
+path = (WORKDIR / p).resolve()
+# "/app/workspace" / "../../../etc/passwd"
+# = "/etc/passwd"（resolve 会解析 ..）
+
+# 2. 检查是否在 WORKDIR 内
+if not path.is_relative_to(WORKDIR):
+    # "/etc/passwd".is_relative_to("/app/workspace")
+    # = False → 抛出异常
+    raise ValueError(...)
+```
+
+**测试用例：**
+
+```python
+# ✅ 允许的路径
+safe_path("./test.txt")           # /app/workspace/test.txt
+safe_path("subdir/file.txt")      # /app/workspace/subdir/file.txt
+safe_path("../workspace/file.txt") # /app/workspace/file.txt
+
+# ❌ 禁止的路径
+safe_path("../etc/passwd")        # 抛出异常
+safe_path("/etc/passwd")          # 抛出异常
+safe_path("../../home/user/.ssh/id_rsa")  # 抛出异常
+```
+
+**为什么不用字符串检查？**
+
+```python
+# ❌ 错误的做法
+if ".." in path:
+    raise ValueError()
+
+# 绕过方法：
+path = "....//....//etc/passwd"  # 没有 ".." 但解析后是 "/etc/passwd"
+
+# ✅ 正确的做法：用 resolve() 规范化后再检查
+```
+
+---
+
+### 3. 工具定义格式详解
+
+**为什么是这种格式？**
+
+这是 **Anthropic Function Calling** 的标准格式，设计考虑：
+
+```python
+TOOLS = [{
+    "name": "bash",
+    "description": "Run a shell command.",
+    "input_schema": {
+        "type": "object",
+        "properties": {"command": {"type": "string"}},
+        "required": ["command"],
+    },
+}]
+```
+
+**每个字段的作用：**
+
+| 字段 | 作用 | LLM 如何使用 |
+|------|------|-------------|
+| `name` | 工具标识 | 匹配要调用的工具 |
+| `description` | 工具说明 | 决定何时调用 |
+| `input_schema` | 参数定义 | 决定传什么参数 |
+
+**为什么用 JSON Schema？**
+
+```python
+# 好处 1：类型检查
+"command": {"type": "string"}  # LLM 知道这是字符串
+
+# 好处 2：必填验证
+"required": ["command"]  # LLM 知道必须传这个
+
+# 好处 3：枚举约束
+"status": {"type": "string", "enum": ["pending", "completed"]}
+# LLM 知道只能选这两个值
+```
+
+---
+
 ## 📝 练习题
 
 1. **添加 `list_dir` 工具**：列出目录内容
