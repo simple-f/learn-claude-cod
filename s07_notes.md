@@ -58,141 +58,89 @@ def create(self, subject: str, description: str = "") -> str:
 - `description` - 详细描述
 - `status` - pending / in_progress / completed
 - `blockedBy` - 依赖哪些任务（前置任务）
-- `blocks` - 哪些任务依赖我（后置任务）
-- `owner` - 负责人（s11 用到）
+- `blocks` - 阻塞哪些任务（后置任务）
+- `owner` - 负责人（可选）
 
-### 2. 更新任务状态
+### 2. 完成任务
 
 ```python
-def update(self, task_id: int, status: str = None,
-           add_blocked_by: list = None, add_blocks: list = None) -> str:
+def complete(self, task_id: int) -> str:
     task = self._load(task_id)
+    task["status"] = "completed"
     
-    if status:
-        task["status"] = status
-        # 关键：完成任务时，从所有其他任务的 blockedBy 中移除
-        if status == "completed":
-            self._clear_dependency(task_id)
-    
-    if add_blocked_by:
-        task["blockedBy"] = list(set(task["blockedBy"] + add_blocked_by))
-    
-    if add_blocks:
-        task["blocks"] = list(set(task["blocks"] + add_blocks))
-        # 双向更新：同时更新被阻塞任务的 blockedBy
-        for blocked_id in add_blocks:
-            blocked = self._load(blocked_id)
-            if task_id not in blocked["blockedBy"]:
-                blocked["blockedBy"].append(task_id)
-                self._save(blocked)
+    # 解锁依赖此任务的任务
+    for other in self._all_tasks():
+        if task_id in other.get("blockedBy", []):
+            other["blockedBy"].remove(task_id)
+            self._save(other)
     
     self._save(task)
+    return json.dumps(task, indent=2)
 ```
 
-**关键逻辑：**
-- 完成任务 → 自动解除其他任务的阻塞
-- 添加依赖 → 双向更新（A blocks B → B blockedBy A）
-
-### 3. 清除依赖（第 86-91 行）
+### 3. 列出任务
 
 ```python
-def _clear_dependency(self, completed_id: int):
-    """Remove completed_id from all other tasks' blockedBy lists."""
-    for f in self.dir.glob("task_*.json"):
-        task = json.loads(f.read_text())
-        if completed_id in task.get("blockedBy", []):
-            task["blockedBy"].remove(completed_id)
-            self._save(task)
-```
-
-**为什么重要？**
-- 任务 1 完成后，任务 2 自动解锁
-- 不需要手动管理依赖关系
-- Agent 可以看到哪些任务现在可以做了
-
-### 4. 列出所有任务（第 93-104 行）
-
-```python
-def list_all(self) -> str:
-    tasks = []
-    for f in sorted(self.dir.glob("task_*.json")):
-        tasks.append(json.loads(f.read_text()))
-    
-    lines = []
-    for t in tasks:
-        marker = {"pending": "[ ]", "in_progress": "[>]", "completed": "[x]"}.get(t["status"], "[?]")
-        blocked = f" (blocked by: {t['blockedBy']})" if t.get("blockedBy") else ""
-        lines.append(f"{marker} #{t['id']}: {t['subject']}{blocked}")
-    
-    return "\n".join(tasks)
-```
-
-**输出格式：**
-```
-[ ] #1: 设计数据库 schema
-[>] #2: 实现用户认证 (blocked by: [1])
-[ ] #3: 创建登录页面 (blocked by: [2])
-[x] #4: 项目初始化
+def list(self, status_filter: str = "") -> str:
+    tasks = self._all_tasks()
+    if status_filter:
+        tasks = [t for t in tasks if t["status"] == status_filter]
+    return json.dumps(tasks, indent=2)
 ```
 
 ---
 
 ## 💡 学习要点
 
-### 1. 理解外部状态
+### 1. 理解持久化价值
 
-**对话内状态（易失）：**
+**对比两种方案：**
+
 ```python
-messages = [...]  # 可能被压缩/丢失
-```
+# ❌ 方案 1：任务在对话历史中
+messages = [
+    {"role": "user", "content": "创建任务：写登录功能"},
+    {"role": "assistant", "content": "好的，任务已创建"},
+    {"role": "user", "content": "创建任务：写注册功能"},
+    {"role": "assistant", "content": "好的，任务已创建"},
+    # ... 随着对话压缩，这些信息可能丢失
+]
 
-**对话外状态（持久）：**
-```python
-.tasks/task_1.json  # 永远存在，除非删除
-```
+# 问题：
+# - 对话压缩后，任务信息丢失
+# - 无法跨会话追踪
+# - 难以查询和过滤
 
-**好处：**
-- 对话压缩不丢失任务
-- 重启后任务还在
-- 多 Agent 共享任务板
+# ✅ 方案 2：任务在独立文件中
+.tasks/
+  task_1.json  {"subject": "写登录功能", "status": "pending"}
+  task_2.json  {"subject": "写注册功能", "status": "pending"}
+
+# 好处：
+# - 对话压缩不影响任务
+# - 跨会话追踪
+# - 易于查询和过滤
+```
 
 ### 2. 理解依赖管理
 
-**前置依赖（blockedBy）：**
-```json
-{
-  "id": 2,
-  "subject": "实现用户认证",
-  "blockedBy": [1]  // 任务 1 完成后才能做
-}
+```
+任务依赖关系：
+task_1 (完成) → task_2 (等待) → task_3 (等待)
+
+完成 task_1 后：
+- task_2 的 blockedBy 移除 task_1
+- task_2 变为可执行状态
+- task_3 仍然等待 task_2
 ```
 
-**后置依赖（blocks）：**
-```json
-{
-  "id": 1,
-  "subject": "设计数据库 schema",
-  "blocks": [2, 3]  // 任务 2 和 3 要等我完成
-}
-```
+### 3. 理解任务状态
 
-**双向更新的好处：**
-- 从任务 1 看：知道谁在等我
-- 从任务 2 看：知道我在等谁
-
-### 3. 理解状态机
-
-```
-pending → in_progress → completed
-   ↑
-   └── 可以来回切换
-```
-
-**状态转换规则：**
-- pending → in_progress：开始做
-- in_progress → completed：完成
-- in_progress → pending：暂停
-- completed → in_progress：重新打开
+| 状态 | 含义 | 何时使用 |
+|------|------|----------|
+| `pending` | 等待中 | 刚创建或有依赖未完成 |
+| `in_progress` | 进行中 | 开始执行任务 |
+| `completed` | 已完成 | 任务完成 |
 
 ---
 
@@ -200,34 +148,183 @@ pending → in_progress → completed
 
 | 维度 | learn-claude-code s07 | OpenClaw |
 |------|----------------------|----------|
-| **任务存储** | `.tasks/` JSON 文件 | `memory/` + `HEARTBEAT.md` |
-| **依赖管理** | blockedBy/blocks 图 | 无（任务独立） |
-| **任务分配** | owner 字段（s11 用） | A2A 路由（@mention） |
-| **状态追踪** | pending/in_progress/completed | 无明确状态 |
-| **自动解锁** | 完成后自动解除阻塞 | 无 |
+| **存储方式** | JSON 文件 | memory/ Markdown 文件 |
+| **任务格式** | 结构化 JSON | 自由文本 + frontmatter |
+| **依赖管理** | blockedBy/blocks | 无（隐式依赖） |
+| **查询方式** | 代码 API | 文件搜索 |
+| **跨会话** | ✅ 支持 | ✅ 支持 |
 
-**OpenClaw 可以借鉴的点：**
-- 添加任务依赖管理
-- 用 JSON 文件存储任务（更结构化）
-- 自动解锁机制
+**OpenClaw 可以改进的点：**
+- 添加结构化任务追踪
+- 实现任务依赖管理
+- 提供任务查询 API
+
+---
+
+## 🔬 深度技术解析
+
+### 1. 为什么任务要存储在对话之外？
+
+**详细原理：**
+
+这是**状态与上下文分离**的设计。
+
+**对比分析：**
+
+```
+问题：对话会被压缩
+
+场景：
+1. Agent 创建 3 个任务
+2. 执行任务 1
+3. 对话压缩（丢失任务信息）
+4. Agent 忘记还有任务 2 和 3
+
+结果：任务丢失
+```
+
+**持久化的好处：**
+
+```python
+# ✅ 方案 2：独立存储
+.tasks/
+  task_1.json  # 即使对话压缩，文件还在
+  task_2.json
+  task_3.json
+
+# 好处：
+# - 对话压缩不影响任务
+# - 跨会话追踪
+# - 易于查询和过滤
+# - 支持依赖管理
+```
+
+**类比人类工作：**
+
+```
+❌ 只记在脑子里：
+- 容易忘记
+- 无法分享
+- 难以追踪
+
+✅ 写在任务列表上：
+- 不会忘记
+- 可以分享
+- 易于追踪
+```
+
+---
+
+### 2. 为什么用 JSON 而不是数据库？
+
+**对比多种方案：**
+
+```python
+# ❌ 方案 1：SQLite 数据库
+# 好处：查询快、支持复杂操作
+# 问题：
+# - 需要额外依赖
+# - 二进制文件，不易读
+# - 难以版本控制
+
+# ❌ 方案 2：CSV 文件
+# 好处：简单、易读
+# 问题：
+# - 不支持嵌套结构
+# - 难以表示依赖关系
+
+# ✅ 方案 3：JSON 文件
+# 好处：
+# - 无需额外依赖
+# - 人类可读
+# - 支持嵌套结构
+# - 易于版本控制
+# - 每个任务独立文件（便于并发）
+```
+
+**实际效果：**
+
+```json
+// task_2.json
+{
+  "id": 2,
+  "subject": "写注册功能",
+  "blockedBy": [1],  // 依赖任务 1
+  "blocks": [3],     // 阻塞任务 3
+  "status": "pending"
+}
+```
+
+---
+
+### 3. 依赖管理原理
+
+**详细原理：**
+
+这是**有向无环图（DAG）**的简化实现。
+
+**依赖关系：**
+
+```
+task_1 → task_2 → task_3
+   ↓
+task_4
+```
+
+**数据结构：**
+
+```python
+# 每个任务记录：
+{
+  "id": 2,
+  "blockedBy": [1],  # 前置任务
+  "blocks": [3],     # 后置任务
+}
+```
+
+**解锁逻辑：**
+
+```python
+def complete(self, task_id):
+    # 完成任务
+    task["status"] = "completed"
+    
+    # 解锁依赖此任务的任务
+    for other in all_tasks:
+        if task_id in other["blockedBy"]:
+            other["blockedBy"].remove(task_id)
+```
+
+**检测循环依赖：**
+
+```python
+def has_cycle(task_id, visited=set()):
+    if task_id in visited:
+        return True  # 发现循环
+    visited.add(task_id)
+    for dep in task["blockedBy"]:
+        if has_cycle(dep, visited):
+            return True
+    return False
+```
 
 ---
 
 ## 📝 练习题
 
-1. **添加任务优先级**：`priority` 字段（high/medium/low）
-2. **添加任务标签**：`tags` 字段（如 `["backend", "urgent"]`）
-3. **添加截止日期**：`due_date` 字段，超期提醒
-4. **实现任务看板**：按状态分组显示任务
+1. **添加任务优先级**：high/medium/low
+2. **实现任务标签**：支持标签过滤
+3. **添加截止日期**：超期提醒
+4. **对比 OpenClaw**：设计一个任务管理系统
 
 ---
 
 ## 🔗 下一步
 
-- **s08 Background Tasks** - 后台任务（并行执行）
-- **s11 Autonomous Agents** - 自主认领任务
-- **OpenClaw HEARTBEAT.md** - 对比我们的任务管理方式
+- **s08 Background Tasks** - 后台任务（异步执行）
+- **s09 Agent Teams** - 多 Agent 协作
+- **s11 Autonomous Agents** - 自主任务认领
 
 ---
 
-*参考：OpenClaw 的 HEARTBEAT.md 和 memory/ 目录*
+*参考：OpenClaw 的 memory/ 目录和 HEARTBEAT.md*

@@ -78,84 +78,92 @@ tags: file,media
 ```
 
 **Frontmatter（YAML）：**
-- `name` - 技能名称
-- `description` - 简短描述（用于 Layer 1）
-- `tags` - 标签（方便搜索）
 
-**Body（Markdown）：**
-- 完整指令
-- 步骤说明
-- 最佳实践
-
----
-
-## 🔧 SkillLoader 类（第 35-72 行）
-
-```python
-class SkillLoader:
-    def __init__(self, skills_dir: Path):
-        self.skills_dir = skills_dir
-        self.skills = {}
-        self._load_all()  # 启动时扫描所有技能
-
-    def _parse_frontmatter(self, text: str) -> tuple:
-        """解析 YAML frontmatter（--- 分隔符之间）"""
-        match = re.match(r"^---\n(.*?)\n---\n(.*)", text, re.DOTALL)
-        # 返回 meta 字典 + body 文本
-
-    def get_descriptions(self) -> str:
-        """Layer 1: 返回所有技能的简短描述"""
-        for name, skill in self.skills.items():
-            desc = skill["meta"].get("description", "No description")
-            lines.append(f"  - {name}: {desc}")
-
-    def get_content(self, name: str) -> str:
-        """Layer 2: 返回指定技能的完整内容"""
-        skill = self.skills.get(name)
-        return f"<skill name=\"{name}\">\n{skill['body']}\n</skill>"
-```
+| 字段 | 作用 | 示例 |
+|------|------|------|
+| `name` | 技能标识 | `pdf` |
+| `description` | 简短描述 | "Process PDF files" |
+| `tags` | 标签（用于搜索） | `file,media` |
 
 ---
 
 ## 💡 学习要点
 
-### 1. 理解 Token 经济性
+### 1. 理解按需加载
 
-**传统方式（全塞进 system prompt）：**
-```
-10 个技能 × 500 tokens = 5000 tokens（每次对话都烧钱）
-```
-
-**按需加载方式：**
-```
-Layer 1: 10 个技能 × 20 tokens = 200 tokens（固定）
-Layer 2: 只用 1 个技能 = 500 tokens（按需）
-总计：700 tokens（节省 86%）
-```
-
-### 2. 理解发现机制
+**对比两种方案：**
 
 ```python
-for f in sorted(self.skills_dir.rglob("SKILL.md")):
-    # 自动扫描 skills/ 目录下所有 SKILL.md
-    # 不需要手动注册
+# ❌ 方案 1：全部塞进 system prompt
+SYSTEM = """
+你是一个编码助手。
+
+技能 1：PDF 处理
+- 步骤 1：用 PyMuPDF 提取文本
+- 步骤 2：分析结构
+...（1000 tokens）
+
+技能 2：代码审查
+- 步骤 1：检查代码规范
+- 步骤 2：查找潜在 bug
+...（1000 tokens）
+
+技能 3：安全最佳实践
+...（1000 tokens）
+"""
+
+# 问题：
+# - 每次调用都带 3000+ tokens
+# - 即使用户只问"Hello"，也要为这些 tokens 付费
+# - LLM 可能被过多信息干扰
+
+# ✅ 方案 2：按需加载
+SYSTEM = """你是一个编码助手。
+可用技能：pdf, code-review, security
+用 load_skill 加载需要的技能。"""
+
+# 好处：
+# - 初始只有 100 tokens
+# - 用户问 PDF 问题时才加载 pdf 技能
+# - 节省 90%+ tokens
 ```
 
-**好处：**
-- 添加新技能只需放一个文件
-- 自动发现，无需修改代码
-- 符合开闭原则
-
-### 3. 理解 XML 包装
+### 2. 理解工具注入
 
 ```python
-return f"<skill name=\"{name}\">\n{skill['body']}\n</skill>"
+# load_skill 工具返回的内容格式
+{
+    "role": "user",
+    "content": "<skill name='pdf'>完整指令...</skill>"
+}
 ```
 
 **为什么用 XML 标签？**
-- 清晰边界（LLM 知道哪里开始/结束）
-- 方便解析（可以用正则提取）
-- 避免指令注入（隔离技能内容）
+
+```
+好处：
+1. 清晰标记开始和结束
+2. LLM 容易识别技能内容
+3. 可以嵌套多个技能
+
+对比：
+- 纯文本：LLM 不知道哪里是技能内容
+- JSON：需要转义，可读性差
+- XML：清晰、易读、易解析
+```
+
+### 3. 理解技能发现
+
+```python
+# 自动扫描 skills/ 目录
+def load_skills_metadata() -> str:
+    skills_list = []
+    for skill_dir in Path("skills").iterdir():
+        if skill_dir.is_dir():
+            skill_meta = parse_frontmatter(skill_dir / "SKILL.md")
+            skills_list.append(f"  - {skill_meta['name']}: {skill_meta['description']}")
+    return "\n".join(skills_list)
+```
 
 ---
 
@@ -163,34 +171,168 @@ return f"<skill name=\"{name}\">\n{skill['body']}\n</skill>"
 
 | 维度 | learn-claude-code s05 | OpenClaw |
 |------|----------------------|----------|
-| **技能存储** | `skills/<name>/SKILL.md` | `skills/<name>/SKILL.md`（相同） |
-| **加载方式** | 启动时扫描 + 按需加载 | 启动时扫描 + 工具系统路由 |
-| **技能描述** | YAML frontmatter | YAML frontmatter（相同） |
-| **注入方式** | Layer 1 + Layer 2 | 工具系统 + 技能说明 |
-| **技能数量** | 动态扩展 | 38+ 内置技能 |
+| **技能存储** | 文件目录（SKILL.md） | 相同 |
+| **加载方式** | 工具调用 | 相同 |
+| **注入格式** | XML 标签 | 相同 |
+| **技能数量** | 3 个示例 | 38+ 内置技能 |
+| **分类方式** | 标签（tags） | 分类 + 标签 |
 
-**OpenClaw 的差异：**
-- OpenClaw 的 Skills 系统更复杂（支持工具调用）
-- OpenClaw 的技能可以触发外部 API（飞书、GitHub 等）
-- learn-claude-code 更纯粹（教学目的）
+**OpenClaw 的改进：**
+- 技能分类（feishu-*, coding-*, automation-*）
+- 技能依赖（某些技能需要前置技能）
+- 技能版本控制（v1, v2）
+
+---
+
+## 🔬 深度技术解析
+
+### 1. 为什么要通过 tool_result 注入技能？
+
+**详细原理：**
+
+这是**上下文效率**的优化。
+
+**对比分析：**
+
+| 方式 | 优点 | 缺点 | 适用场景 |
+|------|------|------|----------|
+| **system prompt** | 永久有效 | 占用每个请求的 tokens | 核心规则 |
+| **tool_result** | 按需加载 | 只在当前轮有效 | 技能/知识 |
+
+**为什么 skill 适合用 tool_result？**
+
+```
+场景：用户问"怎么飞书文档操作？"
+
+❌ system prompt 方式：
+- 每次调用都包含飞书技能（即使用户没问）
+- 浪费 tokens
+- 可能干扰其他任务
+
+✅ tool_result 方式：
+- 用户问到时才加载
+- 只占用一次请求
+- 任务完成后就"忘记"
+```
+
+**底层机制：**
+
+```
+LLM 的注意力机制：
+- system prompt：始终关注（权重高）
+- tool_result：当前轮关注（权重中）
+- 历史消息：逐渐衰减（权重低）
+
+技能是"临时知识"，适合用 tool_result。
+```
+
+---
+
+### 2. 为什么用 XML 标签？
+
+**详细原理：**
+
+XML 标签提供**清晰的结构边界**。
+
+**对比多种格式：**
+
+```python
+# ❌ 方案 1：纯文本
+result = "PDF 处理技能：步骤 1... 步骤 2..."
+# 问题：LLM 不知道哪里是技能内容
+
+# ❌ 方案 2：JSON
+result = json.dumps({"skill": "pdf", "content": "..."})
+# 问题：需要转义，LLM 解析困难
+
+# ✅ 方案 3：XML
+result = "<skill name='pdf'>完整指令...</skill>"
+# 好处：
+# - 清晰标记开始和结束
+# - LLM 容易识别
+# - 人类可读
+```
+
+**实际效果：**
+
+```python
+# LLM 看到的内容
+messages = [
+    {"role": "user", "content": "怎么处理 PDF？"},
+    {"role": "assistant", "content": "我加载 PDF 技能"},
+    {"role": "user", "content": [
+        {"type": "tool_result", "content": """
+<skill name='pdf'>
+  # PDF 处理技能
+  
+  ## 步骤
+  1. 用 PyMuPDF 提取文本
+  2. 分析结构
+  3. 生成摘要
+</skill>
+        """}
+    ]},
+]
+```
+
+---
+
+### 3. 技能元数据设计
+
+**为什么需要元数据？**
+
+```
+问题：
+- 有 38+ 个技能
+- 不能全部塞进 system prompt（太贵）
+- 需要让 LLM 知道有什么可用
+
+解决：
+- 每个技能 100 tokens 元数据
+- 总共 3800 tokens（可接受）
+- LLM 根据需要选择加载
+```
+
+**元数据内容：**
+
+```yaml
+name: pdf                    # 技能标识（用于调用）
+description: Process PDF     # 简短描述（LLM 决定何时用）
+tags: file,media             # 标签（用于搜索）
+version: 1.0                 # 版本号（可选）
+author: ai2                  # 作者（可选）
+```
+
+**扩展设计：**
+
+```yaml
+# 高级功能
+dependencies:                # 依赖其他技能
+  - markdown
+conflicts:                   # 冲突技能
+  - image-ocr
+required_tools:              # 需要的工具
+  - read_file
+  - write_file
+```
 
 ---
 
 ## 📝 练习题
 
-1. **添加技能搜索**：实现 `search_skill(keyword)` 工具
-2. **添加技能缓存**：加载过的技能缓存在内存
-3. **添加技能依赖**：技能 A 依赖技能 B（自动加载）
-4. **对比 OpenClaw**：找一个 OpenClaw skill，分析它和 s05 的区别
+1. **添加技能搜索**：根据标签搜索技能
+2. **实现技能缓存**：加载过的技能缓存到内存
+3. **添加技能版本**：支持多版本共存
+4. **对比 OpenClaw**：找一个 skill 文件，分析结构
 
 ---
 
 ## 🔗 下一步
 
-- **s06 Context Compact** - 上下文压缩（节省 tokens）
-- **s09 Agent Teams** - 多 Agent 协作（技能共享）
-- **OpenClaw Skills** - 查看 `~/.openclaw/workspace-ai1/skills/` 目录
+- **s06 Context Compact** - 上下文压缩（三层记忆）
+- **s07 Task System** - 任务持久化
+- **s09 Agent Teams** - 多 Agent 协作
 
 ---
 
-*参考：OpenClaw skills 目录结构和 SKILL.md 规范*
+*参考：OpenClaw skills 目录 `~/.openclaw/workspace-ai1/skills/`*
